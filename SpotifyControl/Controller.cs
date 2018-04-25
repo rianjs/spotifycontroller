@@ -1,57 +1,44 @@
 ﻿using System;
-using System.Diagnostics;
-using Microsoft.Win32;
+using System.Runtime.InteropServices;
 
 namespace SpotifyControl
 {
-    public class Controller
+    class Controller
     {
-        private const int AppCommand = 0x0319;
-
-        private const int CmdPlayPause = 917504;
-        private const int CmdPrevious = 786432;
-        private const int CmdNext = 720896;
-
-        public static void PlayPause()
+        static void Main(string[] args)
         {
-            SendCommand(CmdPlayPause);
-        }
-
-        public static void PreviousTrack()
-        {
-            SendCommand(CmdPrevious);
-        }
-
-        public static void NextTrack()
-        {
-            SendCommand(CmdNext);
-        }
-
-        public static void SwitchPlaybackDevice(int deviceId1 = 0, int deviceId2 = 1)
-        {
-            // Find our current default playback device
-            var baseKey = RegistryKey.OpenBaseKey(RegistryHive.CurrentUser, RegistryView.Default);
-            var regKey = baseKey.CreateSubKey(@"Software\SpotifyControl", RegistryKeyPermissionCheck.ReadWriteSubTree);
-            var device = (int)regKey.GetValue("PlaybackDevice", deviceId1);
-            device = device == deviceId1 ? deviceId2 : deviceId1;   // Toggle which device we're using
-            regKey.SetValue("PlaybackDevice", device);
-
-            Process.Start(new ProcessStartInfo(@"PlaybackDevicePicker\EndPointController.exe", device.ToString())
+            if (args.Length == 0)
             {
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                CreateNoWindow = true
-            });
+                return;
+            }
+
+            var command = args[0];
+            if (string.Equals("playpause", command, StringComparison.OrdinalIgnoreCase))
+            {
+                SendKeyboardCommand(Command.PlayPause);
+            }
+            else if (string.Equals("next", command, StringComparison.OrdinalIgnoreCase))
+            {
+                SendKeyboardCommand(Command.Next);
+            }
+            else if (string.Equals("prev", command, StringComparison.OrdinalIgnoreCase))
+            {
+                SendKeyboardCommand(Command.Previous);
+            }
         }
 
-        private static void SendCommand(int command)
+        public static void SendKeyboardCommand(Command command)
         {
-            User32.SendMessage(FindSpotifyWindow(), AppCommand, IntPtr.Zero, new IntPtr(command));
+            // Approach taken from:
+            // https://ourcodeworld.com/articles/read/128/how-to-play-pause-music-or-go-to-next-and-previous-track-from-windows-using-c-valid-for-all-windows-music-players
+            
+            const byte keyUp = 0;
+            const byte fromTheKeypad = 1; //https://stackoverflow.com/a/21199466/689185
+
+            keybd_event(virtualKey: (byte)command, scanCode: keyUp, flags: fromTheKeypad, extraInfo: IntPtr.Zero);
         }
 
-        private static IntPtr FindSpotifyWindow()
-        {
-            return User32.FindWindow("SpotifyMainWindow", null);
-        }
+        [DllImport("user32.dll")]
+        public static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, IntPtr extraInfo);
     }
 }
